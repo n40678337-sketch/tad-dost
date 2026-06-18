@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8"><title>Тад Дост — Кур'єр</title>
+  <style>
+    body { font-family: sans-serif; max-width: 700px; margin: 30px auto; padding: 20px; }
+    .order-card { border: 1px solid #ddd; border-radius: 8px; padding: 16px; margin-bottom: 12px; background: #f9fafb; }
+    button { padding: 8px 16px; margin-right: 8px; border: none; border-radius: 6px; cursor: pointer; }
+    .btn-done { background: #22c55e; color: white; }
+    .btn-delete { background: #ef4444; color: white; }
+    .status-new { color: #d97706; font-weight: bold; }
+    .status-done { color: #16a34a; font-weight: bold; }
+  </style>
+</head>
+<body>
+  <h1>📋 Кур'єрська панель</h1>
+  <select id="filter">
+    <option value="all">Всі</option>
+    <option value="нове">Нові</option>
+    <option value="в роботі">В роботі</option>
+    <option value="виконано">Виконані</option>
+  </select>
+  <div id="ordersContainer">Завантаження...</div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    const socket = io();
+    let allOrders = [];
+
+    socket.emit('get-orders');
+    socket.on('orders-updated', (orders) => {
+      allOrders = orders;
+      renderOrders();
+    });
+
+    function updateStatus(orderId, newStatus) {
+      socket.emit('update-status', { orderId, newStatus });
+    }
+    function deleteOrder(orderId) {
+      socket.emit('delete-order', { orderId });
+    }
+
+    function renderOrders() {
+      const filter = document.getElementById('filter').value;
+      const filtered = filter === 'all' ? allOrders : allOrders.filter(o => o.status === filter);
+      const container = document.getElementById('ordersContainer');
+      if (!filtered.length) {
+        container.innerHTML = '<p>Немає замовлень</p>';
+        return;
+      }
+      container.innerHTML = filtered.map(order => {
+        let buttons = '';
+        if (order.status === 'нове') buttons += `<button class="btn-done" onclick="updateStatus('${order.id}','в роботі')">Прийняти</button>`;
+        else if (order.status === 'в роботі') buttons += `<button class="btn-done" onclick="updateStatus('${order.id}','виконано')">Виконано</button>`;
+        buttons += `<button class="btn-delete" onclick="deleteOrder('${order.id}')">Видалити</button>`;
+        return `
+          <div class="order-card">
+            <div><strong>#${order.id.slice(-5)}</strong> <span class="${order.status === 'виконано' ? 'status-done' : 'status-new'}">${order.status}</span></div>
+            <div>👤 ${order.customer.name} | 📞 ${order.customer.phone}</div>
+            <div>📍 ${order.customer.address}</div>
+            <div>📦 ${order.items.map(i => `${i.name} x${i.qty}`).join(', ')}</div>
+            <div>💰 Сума: ${order.total} грн</div>
+            <div style="margin-top:10px;">${buttons}</div>
+            <div style="font-size:0.8em; color:#666;">${new Date(order.created).toLocaleString()}</div>
+          </div>`;
+      }).join('');
+    }
+
+    document.getElementById('filter').addEventListener('change', renderOrders);
+    window.updateStatus = updateStatus;
+    window.deleteOrder = deleteOrder;
+  </script>
+</body>
+</html>
